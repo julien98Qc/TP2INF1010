@@ -100,7 +100,69 @@ void disconnectList(std::list<Client>* connectedClients) {
     printf("La liste des clients a ete envoyee a tous les clients \n");
 }
 
-void connectCommand(Paquet paquet, struct Client client, std::list<Client>* connectedClients) 
+void connectCommand(Paquet paquet, struct Client client, std::list<Client>* connectedClients) {
+    int iSendResult;
+    const char* recvbuf = "";
+    Paquet responsePaquet;
+    std::string str;
+    //Le client envoie son nom dans le paquet, on tient à jour notre liste de clients.
+    client.nom = paquet.emetteur;
+    //Parcours la liste des clients connectés
+    std::list<Client>::iterator itri = connectedClients->begin();
+    while (itri != connectedClients->end()) {
+        if (itri->ClientSocket == client.ClientSocket) {
+            itri->nom = paquet.emetteur;        //Mise à jour du nom du client dans notre liste de clients
+            break;
+        }
+        else {
+            ++itri;
+        }
+    }
+
+    //Parcours la liste des clients connectés pour les ajouter à notre string
+    itri = connectedClients->begin();
+    while (itri != connectedClients->end()) {
+        responsePaquet.message += itri->nom + ", ";
+        itri++;
+    }
+
+    //Enleve la virgule a la fin
+    responsePaquet.message = responsePaquet.message.substr(0, responsePaquet.message.size() - 2);
+
+    responsePaquet.emetteur = "serveur";
+    responsePaquet.commande = "list";
+
+    //Envoie à tous les clients
+    itri = connectedClients->begin();
+    while (itri != connectedClients->end()) {
+
+        responsePaquet.destinataire = itri->nom;
+        //on serialize les informations en un paquet envoyable
+        std::string serialPaquet = serialize(responsePaquet);
+        iSendResult = send(itri->ClientSocket, serialPaquet.c_str(), strlen(serialPaquet.c_str()), 0);
+
+        //Vérification erreur et regarde si le client est toujours connecter
+        if (iSendResult == SOCKET_ERROR) {
+            printf("send failed with error: %d\n", WSAGetLastError());
+            closesocket(client.ClientSocket);
+            //On l'enlève de l'ensemble des clients connectés
+            itri = connectedClients->begin();
+            while (itri != connectedClients->end()) {
+                if (itri->nom == client.nom) {
+                    connectedClients->erase(itri++);
+                    disconnectList(connectedClients);
+                }
+
+                else {
+                    ++itri;
+                }
+            }
+            WSACleanup();
+        }
+        itri++;
+    }
+    printf("La liste des clients a ete envoyee a tous les clients \n");
+}
 
 //Fonction où le serveur exécute la commande du client
 void executeCommand(Paquet paquet, struct Client client, std::list<Client>* connectedClients) {
