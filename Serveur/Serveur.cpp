@@ -100,6 +100,7 @@ void disconnectList(std::list<Client>* connectedClients) {
     printf("La liste des clients a ete envoyee a tous les clients \n");
 }
 
+void connectCommand(Paquet paquet, struct Client client, std::list<Client>* connectedClients) 
 
 //Fonction où le serveur exécute la commande du client
 void executeCommand(Paquet paquet, struct Client client, std::list<Client>* connectedClients) {
