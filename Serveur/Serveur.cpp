@@ -24,7 +24,7 @@
 struct Paquet {
     std::string emetteur;
     std::string commande;
-    std::string destinataire;       //Doit être changer en liste plus tard
+    std::string destinataire;
     std::string message;
 };
 
@@ -257,11 +257,11 @@ void sendToCommand(Paquet paquet, struct Client client, std::list<Client>* conne
         std::string nom;
         std::string separator = ":";
         std::string fullDesti = paquet.destinataire;
-        bool destExist = false;
+        bool destExist;
 
         //on vient chercher chaque destinataire séparé par des :, puis on leur envoie le message
         while ((pos = fullDesti.find(":")) != std::string::npos) {
-
+            destExist = false;
             //on extrait un nom de la chaine
             nom = fullDesti.substr(0, pos);
 
@@ -445,7 +445,7 @@ int handle_connection(struct Client client, std::list<Client>* connectedClients)
     do {
 
         iResult = recv(client.ClientSocket, recvbuf, recvbuflen, 0);
-        if (iResult > 0) {
+        if (iResult > 0 && iResult < 512) {
             recvbuf[iResult] = 0;
             printf("Donnees recues: %s\n", recvbuf);
             //printf("Bytes received: %d\n", iResult);
@@ -560,8 +560,6 @@ int __cdecl main(void)
         ThreadVector.emplace_back([&]() {handle_connection(newClient, ClientListPointer); }); 
         printf("Une nouvelle connexion au serveur.\n");
         }
-
-
     }
     
     // Ferme le socket d'écoute
