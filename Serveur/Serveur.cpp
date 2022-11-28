@@ -164,231 +164,113 @@ void connectCommand(Paquet paquet, struct Client client, std::list<Client>* conn
     printf("La liste des clients a ete envoyee a tous les clients \n");
 }
 
-//Fonction où le serveur exécute la commande du client
-void executeCommand(Paquet paquet, struct Client client, std::list<Client>* connectedClients) {
+void listCommand(Paquet paquet, struct Client client, std::list<Client>* connectedClients) {
     int iSendResult;
     const char* recvbuf = "";
     Paquet responsePaquet;
     std::string str;
 
-    //En ce moment, il y a aucune gestion d'erreur
+    responsePaquet.message = "";
 
-    //Lorsque nouvelle connexion, list à tous les utilisateurs
-    if (paquet.commande == "connect") {
-        //Le client envoie son nom dans le paquet, on tient à jour notre liste de clients.
-        client.nom = paquet.emetteur;
-        //Parcours la liste des clients connectés
-        std::list<Client>::iterator itri = connectedClients->begin();
+    //Parcours la liste des clients connectés pour les ajouter à notre string
+    std::list<Client>::iterator itri = connectedClients->begin();
+    while (itri != connectedClients->end()) {
+        responsePaquet.message += itri->nom + ", ";
+        itri++;
+    }
+
+    //Enleve la virgule a la fin
+    responsePaquet.message = responsePaquet.message.substr(0, responsePaquet.message.size() - 2);
+    responsePaquet.emetteur = "serveur";
+    responsePaquet.commande = "list";
+    responsePaquet.destinataire = paquet.emetteur;
+
+    //on serialize les informations en un paquet envoyable
+    std::string serialPaquet = serialize(responsePaquet);
+    iSendResult = send(client.ClientSocket, serialPaquet.c_str(), strlen(serialPaquet.c_str()), 0);
+    //Vérification erreur et regarde si le client est toujours connecter
+    if (iSendResult == SOCKET_ERROR) {
+        printf("send failed with error: %d\n", WSAGetLastError());
+        closesocket(client.ClientSocket);
+        //On l'enlève de l'ensemble des clients connectés
+        itri = connectedClients->begin();
         while (itri != connectedClients->end()) {
-            if (itri->ClientSocket == client.ClientSocket) {
-                itri->nom = paquet.emetteur;        //Mise à jour du nom du client dans notre liste de clients
-                break;
+            if (itri->nom == client.nom) {
+                connectedClients->erase(itri++);
+                disconnectList(connectedClients);
             }
+
             else {
                 ++itri;
             }
         }
-
-        //Parcours la liste des clients connectés pour les ajouter à notre string
-        itri = connectedClients->begin();
-        while (itri != connectedClients->end()) {
-            responsePaquet.message += itri->nom + ", ";
-            itri++;
-        }
-
-        //Enleve la virgule a la fin
-        responsePaquet.message = responsePaquet.message.substr(0, responsePaquet.message.size() - 2);
-
-        responsePaquet.emetteur = "serveur";
-        responsePaquet.commande = "list";
-        
-        //Envoie à tous les clients
-        itri = connectedClients->begin();
-        while (itri != connectedClients->end()) {
-            
-            responsePaquet.destinataire = itri->nom;
-            //on serialize les informations en un paquet envoyable
-            std::string serialPaquet = serialize(responsePaquet);
-            iSendResult = send(itri->ClientSocket, serialPaquet.c_str(), strlen(serialPaquet.c_str()), 0);
-            
-            //Vérification erreur et regarde si le client est toujours connecter
-            if (iSendResult == SOCKET_ERROR) {
-                printf("send failed with error: %d\n", WSAGetLastError());
-                closesocket(client.ClientSocket);
-                //On l'enlève de l'ensemble des clients connectés
-                itri = connectedClients->begin();
-                while (itri != connectedClients->end()) {
-                    if (itri->nom == client.nom) {
-                        connectedClients->erase(itri++);
-                        disconnectList(connectedClients);
-                    }
-
-                    else {
-                        ++itri;
-                    }
-                }
-                WSACleanup();
-            }
-            itri++;
-        }
-        printf("La liste des clients a ete envoyee a tous les clients \n");
+        WSACleanup();
     }
+    str = "La liste des clients connectes a ete envoyee a " + responsePaquet.destinataire + "\n";
+    printf(str.c_str());
+}
 
-    //La commande list renvoie à l'utilisateur l'ensemble des clients connectés au serveur
-    else if (paquet.commande == "list") {
-        
+void sendToCommand(Paquet paquet, struct Client client, std::list<Client>* connectedClients) {
+    int iSendResult;
+    const char* recvbuf = "";
+    Paquet responsePaquet = paquet;
+    std::string str;
 
-        responsePaquet.message = "";
+    //on serialize les informations en un paquet envoyable
+    std::string serialPaquet = serialize(responsePaquet);
 
-        //Parcours la liste des clients connectés pour les ajouter à notre string
-        std::list<Client>::iterator itri = connectedClients->begin();
+    std::list<Client>::iterator itri = connectedClients->begin();
+    //sendTo à tous les clients
+    if (paquet.destinataire == "all") {
         while (itri != connectedClients->end()) {
-            responsePaquet.message += itri->nom + ", ";
-            itri++;
-        }
+            if (itri->nom != paquet.emetteur) {
+                iSendResult = send(itri->ClientSocket, serialPaquet.c_str(), strlen(serialPaquet.c_str()), 0);
+                //Vérification erreur et regarde si le client est toujours connecter
+                if (iSendResult == SOCKET_ERROR) {
+                    printf("send failed with error: %d\n", WSAGetLastError());
+                    closesocket(client.ClientSocket);
 
-        //Enleve la virgule a la fin
-        responsePaquet.message = responsePaquet.message.substr(0, responsePaquet.message.size() - 2);
+                    //On l'enlève de l'ensemble des clients connectés
+                    itri = connectedClients->begin();
+                    while (itri != connectedClients->end()) {
+                        if (itri->nom == client.nom) {
+                            connectedClients->erase(itri);
+                            disconnectList(connectedClients);
+                        }
 
-        responsePaquet.emetteur = "serveur";
-        responsePaquet.commande = "list";
-        responsePaquet.destinataire = paquet.emetteur;
-
-        //on serialize les informations en un paquet envoyable
-        std::string serialPaquet = serialize(responsePaquet);
-        iSendResult = send(client.ClientSocket, serialPaquet.c_str(), strlen(serialPaquet.c_str()), 0);
-        //Vérification erreur et regarde si le client est toujours connecter
-        if (iSendResult == SOCKET_ERROR) {
-            printf("send failed with error: %d\n", WSAGetLastError());
-            closesocket(client.ClientSocket);
-            //On l'enlève de l'ensemble des clients connectés
-            itri = connectedClients->begin();
-            while (itri != connectedClients->end()) {
-                if (itri->nom == client.nom) {
-                    connectedClients->erase(itri++);
-                    disconnectList(connectedClients);
-                }
-
-                else {
-                    ++itri;
+                        else {
+                            ++itri;
+                        }
+                    }
+                    WSACleanup();
                 }
             }
-            WSACleanup();
+            ++itri;
         }
-        str = "La liste des clients connectes a ete envoyee a " + responsePaquet.destinataire + "\n";
+        str = "Message de " + responsePaquet.emetteur + " a tous les utilisatuers : " + responsePaquet.message + "\n";
         printf(str.c_str());
     }
-    //la commande sendTo envoie un message à un utilisateur ou plusieurs utilisateurs
-    else if (paquet.commande == "sendTo") {
-        
-        responsePaquet = paquet;
-        
-        //on serialize les informations en un paquet envoyable
-        std::string serialPaquet = serialize(responsePaquet);
-        
-        std::list<Client>::iterator itri = connectedClients->begin();
-        //sendTo à tous les clients
-        if (paquet.destinataire == "all") {
-            while (itri != connectedClients->end()) {
-                if (itri->nom != paquet.emetteur) {
-                    iSendResult = send(itri->ClientSocket, serialPaquet.c_str(), strlen(serialPaquet.c_str()), 0);
-                    //Vérification erreur et regarde si le client est toujours connecter
-                    if (iSendResult == SOCKET_ERROR) {
-                        printf("send failed with error: %d\n", WSAGetLastError());
-                        closesocket(client.ClientSocket);
 
-                        //On l'enlève de l'ensemble des clients connectés
-                        itri = connectedClients->begin();
-                        while (itri != connectedClients->end()) {
-                            if (itri->nom == client.nom) {
-                                connectedClients->erase(itri);
-                                disconnectList(connectedClients);
-                            }
+    //sendTo à un ou plusieurs clients
+    else {
+        size_t pos = 0;
+        std::string nom;
+        std::string separator = ":";
+        std::string fullDesti = paquet.destinataire;
+        bool destExist = false;
 
-                            else {
-                                ++itri;
-                            }
-                        }
-                        WSACleanup();
-                    }
-                }
-                ++itri;
-            }
-            str = "Message de " + responsePaquet.emetteur + " a tous les utilisatuers : " + responsePaquet.message + "\n";
-            printf(str.c_str());
-        }
+        //on vient chercher chaque destinataire séparé par des :, puis on leur envoie le message
+        while ((pos = fullDesti.find(":")) != std::string::npos) {
 
-        //sendTo à un ou plusieurs clients
-        else {
-            size_t pos = 0;
-            std::string nom;
-            std::string separator = ":";
-            std::string fullDesti = paquet.destinataire;
-            bool destExist = false;
-
-            //on vient chercher chaque destinataire séparé par des :, puis on leur envoie le message
-            while ((pos = fullDesti.find(":")) != std::string::npos) {
-
-                //on extrait un nom de la chaine
-                nom = fullDesti.substr(0, pos);
-
-                //on remet au debut
-                itri = connectedClients->begin();
-
-
-                while (itri != connectedClients->end()) {
-                    if (itri->nom == nom) {
-                        iSendResult = send(itri->ClientSocket, serialPaquet.c_str(), strlen(serialPaquet.c_str()), 0);
-                        destExist = true;
-                        //Vérification erreur et regarde si le client est toujours connecter
-                        if (iSendResult == SOCKET_ERROR) {
-                            printf("send failed with error: %d\n", WSAGetLastError());
-                            closesocket(client.ClientSocket);
-
-                            //On l'enlève de l'ensemble des clients connectés
-                            itri = connectedClients->begin();
-                            while (itri != connectedClients->end()) {
-                                if (itri->nom == client.nom) {
-                                    connectedClients->erase(itri);
-                                    disconnectList(connectedClients);
-                                    break;
-                                }
-
-                                else {
-                                    ++itri;
-                                }
-                            }
-                            WSACleanup();
-                        }
-                        str = "Message de " + responsePaquet.emetteur + " a " + nom + " : " + responsePaquet.message + "\n";
-                        printf(str.c_str());
-                        break;
-                    }
-                    else {
-                        ++itri;
-                    }
-                }
-                //retire le client de la liste des clients restant à recevoir le message
-                fullDesti.erase(0, pos + separator.length());
-                //Vérification destinataire existe
-                if (!destExist) {
-                    responsePaquet = paquet;
-                    responsePaquet.message = "Le destinataire " + nom + " n'existe pas.\n";
-                    responsePaquet.destinataire = responsePaquet.emetteur;
-                    responsePaquet.emetteur = "Serveur";
-                    printf(responsePaquet.message.c_str());
-                    //on serialize les informations en un paquet envoyable
-                    std::string serialPaquet = serialize(responsePaquet);
-                    iSendResult = send(client.ClientSocket, serialPaquet.c_str(), strlen(serialPaquet.c_str()), 0);
-                }
-            }
+            //on extrait un nom de la chaine
+            nom = fullDesti.substr(0, pos);
 
             //on remet au debut
             itri = connectedClients->begin();
-            destExist = false;
-            //on envoie le message au dernier client
+
+
             while (itri != connectedClients->end()) {
-                if (itri->nom == fullDesti) {
+                if (itri->nom == nom) {
                     iSendResult = send(itri->ClientSocket, serialPaquet.c_str(), strlen(serialPaquet.c_str()), 0);
                     destExist = true;
                     //Vérification erreur et regarde si le client est toujours connecter
@@ -411,19 +293,20 @@ void executeCommand(Paquet paquet, struct Client client, std::list<Client>* conn
                         }
                         WSACleanup();
                     }
-                    str = "Message de " + responsePaquet.emetteur + " a " + fullDesti + " : " + responsePaquet.message + "\n";
+                    str = "Message de " + responsePaquet.emetteur + " a " + nom + " : " + responsePaquet.message + "\n";
                     printf(str.c_str());
                     break;
                 }
-
                 else {
                     ++itri;
                 }
             }
+            //retire le client de la liste des clients restant à recevoir le message
+            fullDesti.erase(0, pos + separator.length());
             //Vérification destinataire existe
-            if ((!destExist) && fullDesti != "") {
+            if (!destExist) {
                 responsePaquet = paquet;
-                responsePaquet.message = "Le destinataire " + fullDesti + " n'existe pas.\n";
+                responsePaquet.message = "Le destinataire " + nom + " n'existe pas.\n";
                 responsePaquet.destinataire = responsePaquet.emetteur;
                 responsePaquet.emetteur = "Serveur";
                 printf(responsePaquet.message.c_str());
@@ -432,9 +315,78 @@ void executeCommand(Paquet paquet, struct Client client, std::list<Client>* conn
                 iSendResult = send(client.ClientSocket, serialPaquet.c_str(), strlen(serialPaquet.c_str()), 0);
             }
         }
+
+        //on remet au debut
+        itri = connectedClients->begin();
+        destExist = false;
+        //on envoie le message au dernier client
+        while (itri != connectedClients->end()) {
+            if (itri->nom == fullDesti) {
+                iSendResult = send(itri->ClientSocket, serialPaquet.c_str(), strlen(serialPaquet.c_str()), 0);
+                destExist = true;
+                //Vérification erreur et regarde si le client est toujours connecter
+                if (iSendResult == SOCKET_ERROR) {
+                    printf("send failed with error: %d\n", WSAGetLastError());
+                    closesocket(client.ClientSocket);
+
+                    //On l'enlève de l'ensemble des clients connectés
+                    itri = connectedClients->begin();
+                    while (itri != connectedClients->end()) {
+                        if (itri->nom == client.nom) {
+                            connectedClients->erase(itri);
+                            disconnectList(connectedClients);
+                            break;
+                        }
+
+                        else {
+                            ++itri;
+                        }
+                    }
+                    WSACleanup();
+                }
+                str = "Message de " + responsePaquet.emetteur + " a " + fullDesti + " : " + responsePaquet.message + "\n";
+                printf(str.c_str());
+                break;
+            }
+
+            else {
+                ++itri;
+            }
+        }
+        //Vérification destinataire existe
+        if ((!destExist) && fullDesti != "") {
+            responsePaquet = paquet;
+            responsePaquet.message = "Le destinataire " + fullDesti + " n'existe pas.\n";
+            responsePaquet.destinataire = responsePaquet.emetteur;
+            responsePaquet.emetteur = "Serveur";
+            printf(responsePaquet.message.c_str());
+            //on serialize les informations en un paquet envoyable
+            std::string serialPaquet = serialize(responsePaquet);
+            iSendResult = send(client.ClientSocket, serialPaquet.c_str(), strlen(serialPaquet.c_str()), 0);
+        }
     }
-        
+}
+
+//Fonction où le serveur exécute la commande du client
+void executeCommand(Paquet paquet, struct Client client, std::list<Client>* connectedClients) {
+    int iSendResult;
+    const char* recvbuf = "";
+    Paquet responsePaquet;
+    std::string str;
+
+    //Lorsque nouvelle connexion, list à tous les utilisateurs
+    if (paquet.commande == "connect") 
+        connectCommand(paquet, client, connectedClients); 
+
+    //La commande list renvoie à l'utilisateur l'ensemble des clients connectés au serveur
+    else if (paquet.commande == "list") 
+        listCommand(paquet, client, connectedClients);
+
+    //la commande sendTo envoie un message à un utilisateur ou plusieurs utilisateurs
+    else if (paquet.commande == "sendTo") 
+        sendToCommand(paquet, client, connectedClients);
     
+    //Erreur de commande
     else {
         responsePaquet = paquet;
         responsePaquet.message = "Commande non reconnue";
