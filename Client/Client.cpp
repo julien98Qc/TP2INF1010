@@ -82,7 +82,6 @@
          str = paquet.emetteur + " : " + paquet.message + "\n";
          printf(str.c_str());
      }
-
      
  }
 
@@ -208,15 +207,9 @@ int __cdecl main(int argc, char** argv)
     std::string nomClient;
     std::string inputClient;
 
-    // Assurez-vous de mettre dans les paramètres de débugging l'argument de la commande "127.0.0.1", Sinon ça marchera pas
-    if (argc != 2) {
-        printf("usage: %s server-name\n", argv[0]);
-        //return 1;
-    }
-
     //Demande au client de s'identifier
     do {
-        printf("\r\nVeuillez entrer votre nom : ");
+        printf("\nVeuillez entrer votre nom : ");
         std::getline(std::cin, nomClient);
     } while (nomClient == "");
 
@@ -259,7 +252,7 @@ int __cdecl main(int argc, char** argv)
                 //printf("send failed with error: %d\n", WSAGetLastError());
                 //closesocket(ConnectSocket);
                 //WSACleanup();
-                printf("Connexion perdu %d\n");
+                printf("Connexion perdu\n");
                 result = resolveServer(argv, hints, result);
                 ConnectSocket = connexion(ptr, result, ConnectSocket, iResult);
                 envoieConnexion(nomClient, iResult, ConnectSocket, argv, hints, ptr, result);
